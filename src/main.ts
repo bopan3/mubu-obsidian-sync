@@ -18,6 +18,8 @@ const DEFAULT_SETTINGS: MubuSyncSettings = {
   autoSyncOnStartup: false,
   autoSyncIntervalMinutes: 60,
   deleteBehavior: "archive",
+  ignoreCompletionStatus: false,
+  debugSaveRawResponses: false,
   lastSyncTime: 0,
   syncedDocuments: {}
 };
@@ -166,7 +168,9 @@ export default class MubuSyncPlugin extends Plugin {
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...safeLoaded,
-      syncedDocuments: loaded?.syncedDocuments ?? {}
+      syncedDocuments: loaded?.syncedDocuments ?? {},
+      ignoreCompletionStatus: loaded?.ignoreCompletionStatus === true,
+      debugSaveRawResponses: loaded?.debugSaveRawResponses === true
     };
 
     if (legacyToken && !this.getJwtToken()) {
@@ -312,6 +316,26 @@ class MubuSyncSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.deleteBehavior)
         .onChange(async value => {
           this.plugin.settings.deleteBehavior = value === "keep" ? "keep" : "archive";
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("忽略幕布完成状态")
+      .setDesc("将所有节点作为普通文本同步，不输出任务复选框（用于排查异常节点）")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.ignoreCompletionStatus)
+        .onChange(async value => {
+          this.plugin.settings.ignoreCompletionStatus = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("保存原始 API 响应")
+      .setDesc("调试用：将文档详情 JSON 保存到 .mubu-sync-debug，请勿长期开启")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.debugSaveRawResponses)
+        .onChange(async value => {
+          this.plugin.settings.debugSaveRawResponses = value;
           await this.plugin.saveSettings();
         }));
 

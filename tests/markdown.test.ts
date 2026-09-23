@@ -51,6 +51,35 @@ test("renders nested nodes, tasks, notes and deadlines", () => {
   assert.match(managed, /📅 2026-/);
 });
 
+test("does not infer a task from missing or string-like completion fields", () => {
+  const managed = renderMubuDocument(summary, [
+    { text: "普通文本" },
+    { text: "字符串零", taskStatus: "0" as unknown as number },
+    { text: "字符串假", completed: "false" as unknown as boolean },
+    { text: "布尔未完成", completed: false },
+    { text: "颜色高亮", textStyle: "red" as unknown as string, note: '<span class="highlight-yellow"><span class="bold">重点</span></span>' }
+  ]);
+
+  assert.match(managed, /- 普通文本/);
+  assert.match(managed, /- 字符串零/);
+  assert.match(managed, /- 字符串假/);
+  assert.match(managed, /- ==\*\*重点\*\*==/);
+  assert.doesNotMatch(managed, /\[x\]|\[ \]|~~/);
+});
+
+test("can ignore completion status as a defensive fallback", () => {
+  const managed = renderMubuDocument(summary, [{ text: "已完成", taskStatus: 0 }], {
+    ignoreCompletionStatus: true
+  });
+  assert.match(managed, /- 已完成/);
+  assert.doesNotMatch(managed, /\[x\]/);
+});
+
+test("only explicit strike markup renders as strikethrough", () => {
+  assert.equal(htmlToMarkdown('<span style="color:red">红色</span><mark>高亮</mark>'), "红色==高亮==");
+  assert.equal(htmlToMarkdown('<s>明确删除线</s>'), "~~明确删除线~~");
+});
+
 test("does not double-wrap heading text that is already bold", () => {
   const managed = renderMubuDocument(summary, [{
     text: '<span class="bold">标题</span>',

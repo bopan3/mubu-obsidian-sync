@@ -113,7 +113,8 @@ export class MubuClient {
       id: summary.id,
       title: firstString(raw, ["name", "title"]) || summary.title,
       definition,
-      baseVersion: firstString(raw, ["baseVersion", "version"]) || undefined
+      baseVersion: firstString(raw, ["baseVersion", "version"]) || undefined,
+      raw
     };
   }
 

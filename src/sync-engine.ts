@@ -56,11 +56,19 @@ export class MubuSyncEngine {
           title: detail.title || summary.title,
           revisionHint: detail.baseVersion || summary.revisionHint
         };
-        const remoteHash = hashDefinition(detail.definition);
+        const remoteHash = hashDefinition({
+          definition: detail.definition,
+          ignoreCompletionStatus: this.settings.ignoreCompletionStatus
+        });
         const managedBlock = renderMubuDocument(
           normalizedSummary,
-          Array.isArray(detail.definition.nodes) ? detail.definition.nodes : []
+          Array.isArray(detail.definition.nodes) ? detail.definition.nodes : [],
+          { ignoreCompletionStatus: this.settings.ignoreCompletionStatus }
         );
+
+        if (this.settings.debugSaveRawResponses && detail.raw !== undefined) {
+          await saveDebugResponse(this.app, summary.id, detail.raw);
+        }
 
         await this.syncDocument(
           normalizedSummary,
@@ -174,6 +182,13 @@ export class MubuSyncEngine {
       await this.saveProgress();
     }
   }
+}
+
+async function saveDebugResponse(app: App, documentId: string, payload: unknown): Promise<void> {
+  const folder = ".mubu-sync-debug";
+  await ensureFolder(app, folder);
+  const safeId = sanitizePathPart(documentId, "document");
+  await app.vault.create(normalizePath(`${folder}/${Date.now()}-${safeId}.json`), `${JSON.stringify(payload, null, 2)}\n`);
 }
 
 function countRemotePathCollisions(

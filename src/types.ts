@@ -51,6 +51,7 @@ export interface MubuDocumentDetail {
   title: string;
   definition: MubuDefinition;
   baseVersion?: string;
+  raw?: unknown;
 }
 
 export interface SyncedDocumentRecord {
@@ -71,6 +72,8 @@ export interface MubuSyncSettings {
   deleteBehavior: DeleteBehavior;
   lastSyncTime: number;
   syncedDocuments: Record<string, SyncedDocumentRecord>;
+  ignoreCompletionStatus: boolean;
+  debugSaveRawResponses: boolean;
 }
 
 export interface LegacyMubuSyncSettings extends Partial<MubuSyncSettings> {

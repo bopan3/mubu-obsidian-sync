@@ -7,10 +7,11 @@ const IMAGE_HOST = "https://document-image.mubu.com/";
 
 export function renderMubuDocument(
   summary: MubuDocumentSummary,
-  nodes: MubuNode[]
+  nodes: MubuNode[],
+  options: { ignoreCompletionStatus?: boolean } = {}
 ): string {
   const title = summary.title.trim() || "未命名文档";
-  const body = renderNodeList(nodes);
+  const body = renderNodeList(nodes, options);
   return [
     MANAGED_START,
     `# ${escapeMarkdownText(title)}`,
@@ -42,13 +43,13 @@ export function replaceManagedBlock(existing: string, managedBlock: string): str
   return `${existing.slice(0, start)}${managedBlock}${existing.slice(end + MANAGED_END.length)}`;
 }
 
-function renderNodeList(nodes: MubuNode[]): string {
+function renderNodeList(nodes: MubuNode[], options: { ignoreCompletionStatus?: boolean }): string {
   const lines: string[] = [];
 
   const visit = (items: MubuNode[], depth: number): void => {
     for (const node of items) {
       const indent = "  ".repeat(depth);
-      const task = isTaskNode(node);
+      const task = !options.ignoreCompletionStatus && isTaskNode(node);
       const bullet = task ? (isCompletedTask(node) ? "- [x] " : "- [ ] ") : "- ";
       let content = htmlToMarkdown(node.text || "").trim();
 
@@ -243,9 +244,9 @@ function imageToMarkdown(image: MubuImage): string {
 }
 
 function isTaskNode(node: MubuNode): boolean {
-  return typeof node.taskStatus === "number"
-    || typeof node.finish === "boolean"
-    || typeof node.completed === "boolean";
+  return (typeof node.taskStatus === "number" && Number.isInteger(node.taskStatus) && (node.taskStatus === 0 || node.taskStatus === 1))
+    || node.finish === true
+    || node.completed === true;
 }
 
 function isCompletedTask(node: MubuNode): boolean {

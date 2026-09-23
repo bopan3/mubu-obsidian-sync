@@ -114,7 +114,8 @@ var MubuClient = class {
       id: summary.id,
       title: firstString(raw, ["name", "title"]) || summary.title,
       definition,
-      baseVersion: firstString(raw, ["baseVersion", "version"]) || void 0
+      baseVersion: firstString(raw, ["baseVersion", "version"]) || void 0,
+      raw
     };
   }
   async fetchPagedDocuments(folders, documents) {
@@ -396,9 +397,9 @@ var import_obsidian3 = require("obsidian");
 var MANAGED_START = "<!-- mubu-sync:start -->";
 var MANAGED_END = "<!-- mubu-sync:end -->";
 var IMAGE_HOST = "https://document-image.mubu.com/";
-function renderMubuDocument(summary, nodes) {
+function renderMubuDocument(summary, nodes, options = {}) {
   const title = summary.title.trim() || "\u672A\u547D\u540D\u6587\u6863";
-  const body = renderNodeList(nodes);
+  const body = renderNodeList(nodes, options);
   return [
     MANAGED_START,
     `# ${escapeMarkdownText(title)}`,
@@ -427,12 +428,12 @@ function replaceManagedBlock(existing, managedBlock) {
   if (start < 0 || end < start) return null;
   return `${existing.slice(0, start)}${managedBlock}${existing.slice(end + MANAGED_END.length)}`;
 }
-function renderNodeList(nodes) {
+function renderNodeList(nodes, options) {
   const lines = [];
   const visit = (items, depth) => {
     for (const node of items) {
       const indent = "  ".repeat(depth);
-      const task = isTaskNode(node);
+      const task = !options.ignoreCompletionStatus && isTaskNode(node);
       const bullet = task ? isCompletedTask(node) ? "- [x] " : "- [ ] " : "- ";
       let content = htmlToMarkdown(node.text || "").trim();
       if (node.emoji) content = `${node.emoji} ${content}`.trim();
@@ -607,7 +608,7 @@ function imageToMarkdown(image) {
   return `![${alt}](${url})`;
 }
 function isTaskNode(node) {
-  return typeof node.taskStatus === "number" || typeof node.finish === "boolean" || typeof node.completed === "boolean";
+  return typeof node.taskStatus === "number" && Number.isInteger(node.taskStatus) && (node.taskStatus === 0 || node.taskStatus === 1) || node.finish === true || node.completed === true;
 }
 function isCompletedTask(node) {
   return node.finish === true || node.completed === true || node.taskStatus === 0;
@@ -658,11 +659,18 @@ var MubuSyncEngine = class {
           title: detail.title || summary.title,
           revisionHint: detail.baseVersion || summary.revisionHint
         };
-        const remoteHash = hashDefinition(detail.definition);
+        const remoteHash = hashDefinition({
+          definition: detail.definition,
+          ignoreCompletionStatus: this.settings.ignoreCompletionStatus
+        });
         const managedBlock = renderMubuDocument(
           normalizedSummary,
-          Array.isArray(detail.definition.nodes) ? detail.definition.nodes : []
+          Array.isArray(detail.definition.nodes) ? detail.definition.nodes : [],
+          { ignoreCompletionStatus: this.settings.ignoreCompletionStatus }
         );
+        if (this.settings.debugSaveRawResponses && detail.raw !== void 0) {
+          await saveDebugResponse(this.app, summary.id, detail.raw);
+        }
         await this.syncDocument(
           normalizedSummary,
           remoteHash,
@@ -751,6 +759,13 @@ var MubuSyncEngine = class {
     }
   }
 };
+async function saveDebugResponse(app, documentId, payload) {
+  const folder = ".mubu-sync-debug";
+  await ensureFolder(app, folder);
+  const safeId = sanitizePathPart(documentId, "document");
+  await app.vault.create((0, import_obsidian3.normalizePath)(`${folder}/${Date.now()}-${safeId}.json`), `${JSON.stringify(payload, null, 2)}
+`);
+}
 function countRemotePathCollisions(catalog, syncRoot) {
   const counts = /* @__PURE__ */ new Map();
   for (const summary of catalog) {
@@ -821,6 +836,8 @@ var DEFAULT_SETTINGS = {
   autoSyncOnStartup: false,
   autoSyncIntervalMinutes: 60,
   deleteBehavior: "archive",
+  ignoreCompletionStatus: false,
+  debugSaveRawResponses: false,
   lastSyncTime: 0,
   syncedDocuments: {}
 };
@@ -951,7 +968,9 @@ var MubuSyncPlugin = class extends import_obsidian4.Plugin {
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...safeLoaded,
-      syncedDocuments: loaded?.syncedDocuments ?? {}
+      syncedDocuments: loaded?.syncedDocuments ?? {},
+      ignoreCompletionStatus: loaded?.ignoreCompletionStatus === true,
+      debugSaveRawResponses: loaded?.debugSaveRawResponses === true
     };
     if (legacyToken && !this.getJwtToken()) {
       this.setJwtToken(legacyToken);
@@ -1034,6 +1053,14 @@ var MubuSyncSettingTab = class extends import_obsidian4.PluginSettingTab {
     }));
     new import_obsidian4.Setting(containerEl).setName("\u5E55\u5E03\u4E2D\u5220\u9664\u7684\u6587\u6863").setDesc("\u5F52\u6863\u4F1A\u5C06\u5BF9\u5E94\u6587\u4EF6\u79FB\u52A8\u5230\u540C\u6B65\u76EE\u5F55\u7684 _mubu_deleted \u6587\u4EF6\u5939").addDropdown((dropdown) => dropdown.addOption("archive", "\u5F52\u6863\uFF08\u63A8\u8350\uFF09").addOption("keep", "\u4FDD\u7559\u539F\u6587\u4EF6").setValue(this.plugin.settings.deleteBehavior).onChange(async (value) => {
       this.plugin.settings.deleteBehavior = value === "keep" ? "keep" : "archive";
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian4.Setting(containerEl).setName("\u5FFD\u7565\u5E55\u5E03\u5B8C\u6210\u72B6\u6001").setDesc("\u5C06\u6240\u6709\u8282\u70B9\u4F5C\u4E3A\u666E\u901A\u6587\u672C\u540C\u6B65\uFF0C\u4E0D\u8F93\u51FA\u4EFB\u52A1\u590D\u9009\u6846\uFF08\u7528\u4E8E\u6392\u67E5\u5F02\u5E38\u8282\u70B9\uFF09").addToggle((toggle) => toggle.setValue(this.plugin.settings.ignoreCompletionStatus).onChange(async (value) => {
+      this.plugin.settings.ignoreCompletionStatus = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian4.Setting(containerEl).setName("\u4FDD\u5B58\u539F\u59CB API \u54CD\u5E94").setDesc("\u8C03\u8BD5\u7528\uFF1A\u5C06\u6587\u6863\u8BE6\u60C5 JSON \u4FDD\u5B58\u5230 .mubu-sync-debug\uFF0C\u8BF7\u52FF\u957F\u671F\u5F00\u542F").addToggle((toggle) => toggle.setValue(this.plugin.settings.debugSaveRawResponses).onChange(async (value) => {
+      this.plugin.settings.debugSaveRawResponses = value;
       await this.plugin.saveSettings();
     }));
     const actions = containerEl.createDiv({ cls: "mubu-sync-settings-actions" });
