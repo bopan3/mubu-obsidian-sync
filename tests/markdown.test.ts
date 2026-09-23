@@ -63,7 +63,7 @@ test("does not infer a task from missing or string-like completion fields", () =
   assert.match(managed, /- 普通文本/);
   assert.match(managed, /- 字符串零/);
   assert.match(managed, /- 字符串假/);
-  assert.match(managed, /- ==\*\*重点\*\*==/);
+  assert.match(managed, /> ==\*\*重点\*\*==/);
   assert.doesNotMatch(managed, /\[x\]|\[ \]|~~/);
 });
 
