@@ -608,7 +608,7 @@ function imageToMarkdown(image) {
   return `![${alt}](${url})`;
 }
 function isTaskNode(node) {
-  return node.taskStatus === 1 || typeof node.finish === "boolean" || typeof node.completed === "boolean";
+  return node.taskStatus === 1 || node.finish === true || node.completed === true;
 }
 function isCompletedTask(node) {
   return node.finish === true || node.completed === true;

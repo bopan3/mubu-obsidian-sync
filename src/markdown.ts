@@ -248,8 +248,8 @@ function isTaskNode(node: MubuNode): boolean {
   // in exported document definitions). Keep the known unchecked value 1 for
   // compatibility, but never infer a task from an isolated zero.
   return node.taskStatus === 1
-    || typeof node.finish === "boolean"
-    || typeof node.completed === "boolean";
+    || node.finish === true
+    || node.completed === true;
 }
 
 function isCompletedTask(node: MubuNode): boolean {
