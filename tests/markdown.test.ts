@@ -42,7 +42,7 @@ test("renders nested nodes, tasks, notes and deadlines", () => {
     taskStatus: 1,
     deadline: 1_787_059_200,
     note: "<strong>备注</strong>",
-    children: [{ text: "子节点", taskStatus: 0 }]
+    children: [{ text: "子节点", completed: true }]
   }]);
 
   assert.match(managed, /- \[ \] 父节点/);

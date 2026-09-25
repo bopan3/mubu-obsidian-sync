@@ -245,10 +245,11 @@ function imageToMarkdown(image: MubuImage): string {
 
 function isTaskNode(node: MubuNode): boolean {
   // Mubu may attach taskStatus: 0 to an otherwise ordinary text node (as seen
-  // in exported document definitions). Do not infer a checkbox from that
-  // numeric field alone; only explicit boolean task flags are trustworthy.
-  return node.finish === true
-    || node.completed === true;
+  // in exported document definitions). Keep the known unchecked value 1 for
+  // compatibility, but never infer a task from an isolated zero.
+  return node.taskStatus === 1
+    || typeof node.finish === "boolean"
+    || typeof node.completed === "boolean";
 }
 
 function isCompletedTask(node: MubuNode): boolean {
