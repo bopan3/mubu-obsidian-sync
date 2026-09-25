@@ -75,6 +75,16 @@ test("can ignore completion status as a defensive fallback", () => {
   assert.doesNotMatch(managed, /\[x\]/);
 });
 
+test("does not treat an isolated Mubu taskStatus zero as a completed task", () => {
+  const managed = renderMubuDocument(summary, [{
+    id: "qZsRT3WSrR",
+    taskStatus: 0,
+    text: "<span>4. undue influence 翻译：不当影响</span>"
+  }]);
+  assert.match(managed, /- 4\. undue influence 翻译：不当影响/);
+  assert.doesNotMatch(managed, /\[x\]/);
+});
+
 test("only explicit strike markup renders as strikethrough", () => {
   assert.equal(htmlToMarkdown('<span style="color:red">红色</span><mark>高亮</mark>'), "红色==高亮==");
   assert.equal(htmlToMarkdown('<s>明确删除线</s>'), "~~明确删除线~~");

@@ -608,10 +608,10 @@ function imageToMarkdown(image) {
   return `![${alt}](${url})`;
 }
 function isTaskNode(node) {
-  return typeof node.taskStatus === "number" && Number.isInteger(node.taskStatus) && (node.taskStatus === 0 || node.taskStatus === 1) || node.finish === true || node.completed === true;
+  return node.finish === true || node.completed === true;
 }
 function isCompletedTask(node) {
-  return node.finish === true || node.completed === true || node.taskStatus === 0;
+  return node.finish === true || node.completed === true;
 }
 function formatUnixDate(timestamp) {
   const date = new Date(timestamp * 1e3);

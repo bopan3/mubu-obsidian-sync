@@ -244,13 +244,15 @@ function imageToMarkdown(image: MubuImage): string {
 }
 
 function isTaskNode(node: MubuNode): boolean {
-  return (typeof node.taskStatus === "number" && Number.isInteger(node.taskStatus) && (node.taskStatus === 0 || node.taskStatus === 1))
-    || node.finish === true
+  // Mubu may attach taskStatus: 0 to an otherwise ordinary text node (as seen
+  // in exported document definitions). Do not infer a checkbox from that
+  // numeric field alone; only explicit boolean task flags are trustworthy.
+  return node.finish === true
     || node.completed === true;
 }
 
 function isCompletedTask(node: MubuNode): boolean {
-  return node.finish === true || node.completed === true || node.taskStatus === 0;
+  return node.finish === true || node.completed === true;
 }
 
 function formatUnixDate(timestamp: number): string {
