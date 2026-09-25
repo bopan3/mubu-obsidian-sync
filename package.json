@@ -1,6 +1,6 @@
 {
   "name": "mubu-obsidian-sync",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "One-way sync from Mubu to Obsidian",
   "author": "Pebble",
   "main": "main.js",

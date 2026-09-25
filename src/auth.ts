@@ -1,14 +1,19 @@
 import { Notice, Platform } from "obsidian";
 import { isAuthenticationMessage } from "./auth-state";
+import { isAllowedLoginNavigation, safeUrlForLog } from "./login-navigation";
 import { MubuApiError } from "./mubu-api";
 
 const LOGIN_URL = "https://mubu.com";
+const LOGIN_PAGE_URL = "https://mubu.com/login";
 const SESSION_PARTITION = "persist:mubu-sync";
 const JWT_COOKIE_NAME = "Jwt-Token";
 
 interface ElectronCookie {
   name: string;
   value: string;
+  domain?: string;
+  path?: string;
+  secure?: boolean;
 }
 
 interface ElectronCookies {
@@ -18,10 +23,20 @@ interface ElectronCookies {
 
 interface ElectronSession {
   cookies: ElectronCookies;
+  clearStorageData?(options?: Record<string, unknown>): Promise<void>;
 }
 
 interface ElectronWebContents {
   session: ElectronSession;
+  setWindowOpenHandler?(handler: (details: { url: string }) => {
+    action: "allow" | "deny";
+    overrideBrowserWindowOptions?: Record<string, unknown>;
+  }): void;
+  removeAllListeners?(event: "will-navigate"): void;
+  on?(event: "will-navigate", listener: (event: { preventDefault(): void }, url: string) => void): void;
+  on?(event: "did-create-window", listener: (child: ElectronBrowserWindow) => void): void;
+  getUserAgent?(): string;
+  setUserAgent?(userAgent: string): void;
 }
 
 interface ElectronBrowserWindow {
@@ -59,12 +74,7 @@ type VerifyToken = (token: string) => Promise<void>;
 export async function clearMubuLoginSession(): Promise<void> {
   const session = resolveSession();
   if (!session) return;
-
-  try {
-    await session.cookies.remove(LOGIN_URL, JWT_COOKIE_NAME);
-  } catch (error) {
-    console.warn("[Mubu Sync] Could not clear the Mubu login cookie", error);
-  }
+  await clearMubuSessionData(session);
 }
 
 export async function loginToMubu(verifyToken: VerifyToken): Promise<string | null> {
@@ -77,8 +87,7 @@ export async function loginToMubu(verifyToken: VerifyToken): Promise<string | nu
     throw new Error("当前 Obsidian 无法打开幕布登录窗口，请使用手动 Token 模式");
   }
 
-  return new Promise<string | null>((resolve, reject) => {
-    const win = new BrowserWindow({
+  const win = new BrowserWindow({
       width: 480,
       height: 720,
       title: "登录幕布",
@@ -90,6 +99,11 @@ export async function loginToMubu(verifyToken: VerifyToken): Promise<string | nu
         partition: SESSION_PARTITION
       }
     });
+  configureLoginWindow(win);
+  await clearMubuSessionData(win.webContents.session);
+  if (win.isDestroyed()) return null;
+
+  return new Promise<string | null>((resolve, reject) => {
 
     let settled = false;
     let checking = false;
@@ -130,7 +144,7 @@ export async function loginToMubu(verifyToken: VerifyToken): Promise<string | nu
             await clearJwtCookie(win.webContents.session);
             if (!win.isDestroyed()) {
               new Notice("幕布登录已过期，请在窗口中重新登录");
-              await Promise.resolve(win.loadURL(LOGIN_URL));
+              await Promise.resolve(win.loadURL(LOGIN_PAGE_URL));
             }
           }
         })
@@ -148,7 +162,7 @@ export async function loginToMubu(verifyToken: VerifyToken): Promise<string | nu
     win.on("closed", () => finish(null));
 
     try {
-      void win.loadURL(LOGIN_URL);
+      void win.loadURL(LOGIN_PAGE_URL);
     } catch (error) {
       fail(error);
     }
@@ -156,17 +170,69 @@ export async function loginToMubu(verifyToken: VerifyToken): Promise<string | nu
 }
 
 async function readJwtToken(session: ElectronSession): Promise<string | null> {
-  const cookies = await session.cookies.get({ url: LOGIN_URL, name: JWT_COOKIE_NAME });
-  const token = cookies.find(cookie => cookie.name === JWT_COOKIE_NAME)?.value.trim();
+  const cookies = await session.cookies.get({});
+  const token = cookies.find(cookie => cookie.name.toLowerCase() === JWT_COOKIE_NAME.toLowerCase()
+    && isMubuCookie(cookie))?.value.trim();
   return token || null;
 }
 
 async function clearJwtCookie(session: ElectronSession): Promise<void> {
   try {
-    await session.cookies.remove(LOGIN_URL, JWT_COOKIE_NAME);
+    const cookies = (await session.cookies.get({})).filter(cookie =>
+      cookie.name.toLowerCase() === JWT_COOKIE_NAME.toLowerCase() && isMubuCookie(cookie));
+    if (cookies.length === 0) await session.cookies.remove(LOGIN_URL, JWT_COOKIE_NAME);
+    else await Promise.all(cookies.map(cookie => session.cookies.remove(cookieUrl(cookie), cookie.name)));
   } catch (error) {
     console.warn("[Mubu Sync] Could not clear expired Mubu login cookie", error);
   }
+}
+
+function isMubuCookie(cookie: ElectronCookie): boolean {
+  const domain = (cookie.domain || "mubu.com").replace(/^\./, "").toLowerCase();
+  return domain === "mubu.com" || domain.endsWith(".mubu.com");
+}
+
+function cookieUrl(cookie: ElectronCookie): string {
+  const domain = (cookie.domain || "mubu.com").replace(/^\./, "");
+  return `${cookie.secure === false ? "http" : "https"}://${domain}${cookie.path || "/"}`;
+}
+
+async function clearMubuSessionData(session: ElectronSession): Promise<void> {
+  try {
+    await session.clearStorageData?.({ storages: ["cookies", "localstorage", "indexeddb"] });
+  } catch (error) {
+    console.warn("[Mubu Sync] Could not clear Mubu login storage", error);
+  }
+  try {
+    const cookies = (await session.cookies.get({})).filter(isMubuCookie);
+    await Promise.all(cookies.map(cookie => session.cookies.remove(cookieUrl(cookie), cookie.name)));
+  } catch (error) {
+    console.warn("[Mubu Sync] Could not clear Mubu login cookies", error);
+  }
+}
+
+function configureLoginWindow(win: ElectronBrowserWindow): void {
+  const contents = win.webContents;
+  const userAgent = contents.getUserAgent?.();
+  if (userAgent && contents.setUserAgent) {
+    contents.setUserAgent(userAgent.replace(/\s+(?:electron|obsidian)\/[\w.-]+/gi, "").replace(/\s{2,}/g, " ").trim());
+  }
+  contents.removeAllListeners?.("will-navigate");
+  contents.setWindowOpenHandler?.(({ url }) => {
+    if (!isAllowedLoginNavigation(url)) {
+      console.warn(`[Mubu Sync] Blocked login popup: ${safeUrlForLog(url)}`);
+      return { action: "deny" };
+    }
+    return { action: "allow", overrideBrowserWindowOptions: {
+      parent: win,
+      show: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, partition: SESSION_PARTITION }
+    } };
+  });
+  contents.on?.("will-navigate", (event, url) => {
+    if (!isAllowedLoginNavigation(url)) event.preventDefault();
+  });
+  contents.on?.("did-create-window", child => configureLoginWindow(child));
 }
 
 function isExpiredMubuLogin(error: unknown): boolean {
