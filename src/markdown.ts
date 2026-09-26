@@ -265,7 +265,7 @@ function formatUnixDate(timestamp: number): string {
 }
 
 function escapeMarkdownText(value: string): string {
-  return value.replace(/[\[\]`]/g, "").replace(/\s+/g, " ").trim();
+  return value.split("[").join("").split("]").join("").split("`").join("").replace(/\s+/g, " ").trim();
 }
 
 function yamlString(value: string): string {

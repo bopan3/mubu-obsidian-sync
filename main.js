@@ -257,7 +257,7 @@ function buildFolderPaths(folders) {
   return paths;
 }
 function sanitizePathPart(value, fallback = "\u672A\u547D\u540D") {
-  const cleaned = value.replace(/[\\/:*?"<>|#^[\]]/g, "-").replace(/[\u0000-\u001f]/g, "").replace(/\s+/g, " ").replace(/[. ]+$/g, "").trim();
+  const cleaned = value.replace(/[\\/:*?"<>|#^]/g, "-").split("[").join("-").split("]").join("-").replace(/[\p{Cc}]/gu, "").replace(/\s+/g, " ").replace(/[. ]+$/g, "").trim();
   return cleaned || fallback;
 }
 function arrayValue(value) {
@@ -695,7 +695,7 @@ function formatUnixDate(timestamp) {
   return `${year}-${month}-${day}`;
 }
 function escapeMarkdownText(value) {
-  return value.replace(/[\[\]`]/g, "").replace(/\s+/g, " ").trim();
+  return value.split("[").join("").split("]").join("").split("`").join("").replace(/\s+/g, " ").trim();
 }
 function yamlString(value) {
   return JSON.stringify(value);

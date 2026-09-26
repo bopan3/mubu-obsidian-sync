@@ -254,8 +254,9 @@ function buildFolderPaths(folders: Map<string, MubuFolder>): Map<string, string>
 
 export function sanitizePathPart(value: string, fallback = "未命名"): string {
   const cleaned = value
-    .replace(/[\\/:*?"<>|#^[\]]/g, "-")
-    .replace(/[\u0000-\u001f]/g, "")
+    .replace(/[\\/:*?"<>|#^]/g, "-")
+    .split("[").join("-").split("]").join("-")
+    .replace(/[\p{Cc}]/gu, "")
     .replace(/\s+/g, " ")
     .replace(/[. ]+$/g, "")
     .trim();
