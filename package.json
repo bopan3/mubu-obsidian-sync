@@ -1,6 +1,6 @@
 {
   "name": "mubu-obsidian-sync",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "One-way sync from Mubu to Obsidian",
   "author": "Pebble",
   "main": "main.js",
@@ -22,7 +22,7 @@
     "@types/jsdom": "^21.1.7",
     "esbuild": "^0.25.0",
     "jsdom": "^26.0.0",
-    "obsidian": "latest",
+    "obsidian": "1.13.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
